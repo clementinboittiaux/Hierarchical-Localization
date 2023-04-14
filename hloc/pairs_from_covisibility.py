@@ -8,13 +8,27 @@ from . import logger
 from .utils.read_write_model import read_model
 
 
-def main(model, output, num_matched):
+def main(model, output, num_matched, query_list: Path = None, db_model: Path = None):
     logger.info('Reading the COLMAP model...')
     cameras, images, points3D = read_model(model)
+
+    if query_list is not None:
+        query_names = query_list.read_text().splitlines()
+    else:
+        query_names = [image.name for image in images.values()]
+
+    if db_model is not None:
+        db_names = [image.name for image in read_model(db_model)[1].values()]
+    else:
+        db_names = [image.name for image in images.values()]
 
     logger.info('Extracting image pairs from covisibility info...')
     pairs = []
     for image_id, image in tqdm(images.items()):
+
+        if image.name not in query_names:
+            continue
+
         matched = image.point3D_ids != -1
         points3D_covis = image.point3D_ids[matched]
 
@@ -28,7 +42,7 @@ def main(model, output, num_matched):
             logger.info(f'Image {image_id} does not have any covisibility.')
             continue
 
-        covis_ids = np.array(list(covis.keys()))
+        covis_ids = np.array([i for i in covis if images[i].name in db_names])
         covis_num = np.array([covis[i] for i in covis_ids])
 
         if len(covis_ids) <= num_matched:
